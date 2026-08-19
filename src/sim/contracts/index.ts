@@ -74,3 +74,36 @@ export type {
 } from "../objects/objectData";
 export type { ResourceYield, ResourceExtractionContext } from "../objects/resourceExtraction";
 export type { TreeDescriptor, RockDescriptor } from "../objects/generation";
+
+/**
+ * Team 04 (Biology / Genetics / Evolution) contracts.
+ *
+ * Following the barrel's own convention above: Foundation types are left
+ * untouched, and Team 04 only adds its own stable shapes here for later
+ * teams (Ecology, NPC, ...) to depend on without reaching into
+ * src/sim/biology/** internals.
+ */
+export type { BioEntity, BiologicalSex, LifeStage } from "../biology/entity/bioEntity";
+export type { GenomeData, GeneData, AlleleData, MutationConfig } from "../biology/genetics/geneTypes";
+export type { TraitDefinition, TraitGene, TraitValue } from "../biology/traits/traitDefinition";
+export type { BiologicalEnvironment } from "../biology/environment/biologicalEnvironment";
+export type { SpeciesConfig } from "../biology/species/speciesConfig";
+export type { BiologicalEvent } from "../biology/events/biologicalEvents";
+export type { BiologyModuleState } from "../biology/tick/biologyModuleState";
+
+/**
+ * Team 06 (Individual Creature Intelligence) contracts.
+ */
+export type { CreatureState } from "../creature/state/creatureState";
+export type { NeedsState } from "../creature/state/needs";
+export type { PersonalityTraits } from "../creature/personality/personality";
+export type { EmotionalState } from "../creature/emotional/emotionalState";
+export type { MemoryEntry } from "../creature/memory/memory";
+export type { Relationship } from "../creature/relationships/relationship";
+export type { Perception, PerceivableEntity, SensoryProfile } from "../creature/perception/perception";
+export type { Goal } from "../creature/goals/goals";
+export type { ActionProposal, ActionResult } from "../creature/actions/actions";
+export type { MovementIntent } from "../creature/movement/movementIntent";
+export type { SpeciesDefinition } from "../creature/species/species";
+export type { BiologyProvider } from "../creature/integration/biologyAdapter";
+export type { EcologyProvider } from "../creature/integration/ecologyAdapter";

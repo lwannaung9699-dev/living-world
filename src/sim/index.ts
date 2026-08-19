@@ -38,3 +38,33 @@ export * from "./worldgen";
 // concrete Team 02 generator. See src/sim/materials and src/sim/objects.
 export * from "./materials";
 export * from "./objects";
+
+// --- Team 06 (Individual Creature Intelligence) -------------------------------
+// Consumes Team 04 (biology) and Team 05 (ecology) only through its own
+// BiologyProvider/EcologyProvider adapters (see src/sim/creature/integration).
+// See src/sim/creature/index.ts.
+export * from "./creature/index";
+
+// --- Team 04 (Biology / Genetics / Evolution) --------------------------------
+// Additive only: Foundation (everything above) is untouched. See src/sim/biology/index.ts.
+export * from "./biology";
+
+// --- Team 05 (Ecology + Ecosystem Dynamics) -----------------------------------
+// Consumes Team 02 (environment) and Team 04 (biology) only through its own
+// abstract adapter shapes (see src/sim/ecology/contracts.ts) — never their
+// concrete internals. See src/sim/ecology/index.ts.
+export * from "./ecology";
+
+// --- Team 07 (Society & Civilization) -----------------------------------------
+// Consumes Team 04 (biology/kinship) and Team 06 (NPC/individuals) only
+// through its own adapter shapes that duck-type against state.modules.*,
+// degrading to safe no-ops when a dependency hasn't landed yet (Team 06 not
+// yet merged as of this pass). See src/sim/society/contracts.ts and index.ts.
+export * from "./society";
+
+// --- Team 08 (Law & Governance) -----------------------------------------------
+// Consumes Team 06 (NPC) and Team 07 (Society) only through its own
+// populationAdapter, which duck-types state.modules.npc/society and falls
+// back to a clearly-flagged (`sourced: false`) synthetic population when
+// neither has landed yet. See src/sim/politics/index.ts.
+export * from "./politics";
