@@ -5,7 +5,30 @@
  * reaching into individual files, so internal layout can evolve freely.
  */
 
-export * from "./types";
+export type {
+  SocialGroup,
+  InteractionEvent,
+  SettlementType,
+  Settlement,
+  SocialRole,
+  SocialNorm,
+  SanctionKind,
+  SanctionRecord,
+  CulturalTrait,
+  CollectiveMemoryEvent,
+  Story,
+  SymbolMeaning,
+  CulturalSymbol,
+  LanguageConcept,
+  Technology,
+  TradeRecord,
+  MigrationRecord,
+  InstitutionKind,
+  Institution,
+  CivilizationMetrics,
+} from "./types";
+export { SOCIAL_ROLES } from "./types";
+export type { Relationship as SocietyRelationship, InteractionKind as SocietyInteractionKind } from "./types";
 export * from "./contracts";
 export type { SocietyState } from "./state";
 export { createInitialSocietyState, readSocietyState, writeSocietyState, SOCIETY_MODULE_KEY, SOCIETY_CONTRACT_VERSION } from "./state";
