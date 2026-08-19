@@ -27,6 +27,10 @@ export * from "./core/serialization/worldStateSerializer";
 export * from "./core/replay/replay";
 export * from "./persistence/worldStateRepository";
 
+// --- Team 02 (World Genesis) ------------------------------------------------
+// See src/sim/worldgen/index.ts for the full API surface.
+export * from "./worldgen";
+
 // --- Team 03 (Physics + Materials + Procedural Objects) ---------------------
 // Independent, engine-agnostic subsystem built in parallel with Team 02
 // (World Genesis). Depends only on Team 01 Foundation (RngStreamRegistry,

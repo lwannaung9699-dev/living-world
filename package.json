@@ -6,7 +6,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:sim": "tsx --test \"src/sim/test/**/*.test.ts\""
   },
   "dependencies": {
     "dotenv": "17.3.1",

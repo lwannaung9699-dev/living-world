@@ -18,6 +18,35 @@ export type { SimulationContext, SubsystemTickFn } from "../core/simulation/simu
 export type { ReplayResult } from "../core/replay/replay";
 export type { WorldStateRepository } from "../persistence/worldStateRepository";
 
+// Team 02 — World Genesis contracts.
+export type {
+  PlanetaryConditions,
+  RockType,
+  GeologicalPlate,
+  GeologyConditions,
+  GeographyConditions,
+  Landform,
+  HydrologyConditions,
+  ClimateConditions,
+  ClimateSample,
+  WeatherConditions,
+  WeatherSample,
+  SoilConditions,
+  SoilSample,
+  ResourceId,
+  ResourceDefinition,
+  ResourceDepthBand,
+  ResourceDeposit,
+  ResourcesConditions,
+  BiomeDefinition,
+  BiomesConditions,
+  HabitatsConditions,
+  HabitatSample,
+  ChunkCoordinate,
+  CellData,
+  ChunkData,
+} from "../worldgen/contracts/types";
+
 // --- Team 03 (Physics + Materials + Procedural Objects) ---------------------
 export type { MaterialData, MaterialDataInput, MaterialCategory, MaterialState, MaterialTemperatureRange } from "../materials/materialData";
 export type { MaterialRegistryState } from "../materials/materialRegistry";
