@@ -97,7 +97,7 @@ test("Team 06/07 integration: real Team 07 society/group structure is read (popu
           "team07-settlement-1": { settlementId: "team07-settlement-1", locationId: "loc-1", groupId: "group-1", foundedTick: 0, presence: 10, population: 90, settlementType: "village", defensibility: 0.5 },
         },
         groups: {
-          "group-1": { groupId: "group-1", memberIds: ["individual-1", "individual-2"], founderIds: [], leaderIds: [], sharedGoals: [], territory: {}, resources: { pooled: 25 }, customs: [], normIds: [], identitySymbolIds: [], foundedTick: 0, tension: 0.2, parentGroupId: null, active: true },
+          "group-1": { groupId: "group-1", memberIds: ["individual-1", "individual-2"], founderIds: [], leaderIds: [], sharedGoals: [], territory: {}, resources: { pooled: 25, economicStockTotal: 0 }, customs: [], normIds: [], identitySymbolIds: [], foundedTick: 0, tension: 0.2, parentGroupId: null, active: true },
         },
       },
     },

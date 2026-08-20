@@ -7,19 +7,22 @@
  * same step, so the conservation ledger always balances (see
  * economy.test.ts).
  *
- * KNOWN GAP (documented, not hidden): this reads Team 05's
- * `EcologicalResource.availableAmount` only as a ceiling on how much a
- * settlement *could* plausibly extract this tick — it does not call
- * ecology's own `consumeResource` to actually deplete Team 05's copy,
- * because doing so would mean Economy mutating another team's module
- * state, which the project brief for Team 09 explicitly rules out
- * ("Economy must not directly cross into and mutate NPC/Society/World
- * state"). The result: Team 09's own stocks are fully conserved and
- * tested, but extraction is not yet actually subtracted from Team 05's
- * regenerating resource pool. Wiring that up (likely via a new consumption
- * request/adapter Team 05 accepts, mirroring how Team 06/07 individuals
- * already consume ecology resources) is real, still-open follow-up work —
- * see README.md.
+ * RESOLVED GAP (previously documented as open in README.md gap #1): this
+ * still only reads Team 05's `EcologicalResource.availableAmount` as a
+ * ceiling — Economy still never calls ecology's own `consumeResource` or
+ * writes into `state.modules.ecology` directly (Team 09's brief still rules
+ * that out: "Economy must not directly cross into and mutate NPC/Society/
+ * World state"). Instead, every amount harvested this tick is now also
+ * recorded per Team 05 `resourceId` into `EconomyState.
+ * pendingConsumptionByResourceId` (replacing, not accumulating, each tick).
+ * The pipeline's composition root (defaultSimulationPipeline.ts) feeds that
+ * record into Team 05's ecology subsystem as an external consumption demand
+ * the *following* tick (Ecology runs before Economy each tick, so this is
+ * the earliest point a single-writer-per-module pipeline can apply it),
+ * where it is resolved fairly alongside herbivory/predation demands via
+ * ecology's own `resolveConsumption` + `consumeResource`. Team 05 remains
+ * the only writer of `state.modules.ecology`; Team 09 remains the only
+ * writer of `state.modules.economy`.
  */
 
 import { DeterministicRng } from "../core/rng/deterministicRng";
@@ -64,6 +67,10 @@ export function harvestForSettlements(
 
   let stocks = economy.stocks;
   let harvestedTotal = economy.harvestedTotal;
+  // This tick's draw per Team 05 resourceId, fresh each call (not merged with
+  // the previous tick's economy.pendingConsumptionByResourceId) — it reports
+  // only what THIS tick harvested, for ecology to apply as external demand.
+  let pendingConsumptionByResourceId: Record<string, number> = {};
 
   const sortedSettlements = [...settlements].sort((a, b) => a.settlementId.localeCompare(b.settlementId));
 
@@ -96,10 +103,14 @@ export function harvestForSettlements(
         ...harvestedTotal,
         [resource.resourceType]: (harvestedTotal[resource.resourceType] ?? 0) + amount,
       };
+      pendingConsumptionByResourceId = {
+        ...pendingConsumptionByResourceId,
+        [resource.resourceId]: (pendingConsumptionByResourceId[resource.resourceId] ?? 0) + amount,
+      };
     }
   }
 
-  return { ...economy, stocks, harvestedTotal };
+  return { ...economy, stocks, harvestedTotal, pendingConsumptionByResourceId };
 }
 
 /** Sum of a single resourceType's quantity across every settlement's stock. Used by production and by conservation tests. */

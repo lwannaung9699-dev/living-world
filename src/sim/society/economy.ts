@@ -47,7 +47,10 @@ export function settleResourcePool(society: SocietyState, decayFraction = 0.3): 
     if (!group.active) continue;
     const mode = classifySharingMode(society, groupId);
     const drain = mode === "communal_sharing" || mode === "redistribution" ? decayFraction : decayFraction * 0.5;
-    groups = { ...groups, [groupId]: { ...group, resources: { pooled: group.resources.pooled * (1 - drain) } } };
+    groups = {
+      ...groups,
+      [groupId]: { ...group, resources: { ...group.resources, pooled: group.resources.pooled * (1 - drain) } },
+    };
   }
   return { ...society, groups };
 }
@@ -101,10 +104,16 @@ export function evaluateTrade(society: SocietyState, tick: number): SocietyState
         ...current,
         groups: {
           ...current.groups,
-          [giver]: { ...current.groups[giver], resources: { pooled: current.groups[giver].resources.pooled - value } },
+          [giver]: {
+            ...current.groups[giver],
+            resources: { ...current.groups[giver].resources, pooled: current.groups[giver].resources.pooled - value },
+          },
           [receiver]: {
             ...current.groups[receiver],
-            resources: { pooled: current.groups[receiver].resources.pooled + value },
+            resources: {
+              ...current.groups[receiver].resources,
+              pooled: current.groups[receiver].resources.pooled + value,
+            },
           },
         },
       };

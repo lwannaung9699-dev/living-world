@@ -56,7 +56,7 @@ export function applyCooperation(
       ...current,
       groups: {
         ...current.groups,
-        [groupA]: { ...group, resources: { pooled: group.resources.pooled + resourceGain } },
+        [groupA]: { ...group, resources: { ...group.resources, pooled: group.resources.pooled + resourceGain } },
       },
     };
 

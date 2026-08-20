@@ -23,6 +23,8 @@ import { SOCIETY_MODULE_KEY, SocietyState } from "../society/state";
 /* ---------------------------------------------------------------------- */
 
 export interface HarvestableResourceSnapshot {
+  /** Team 05's resourceId — carried through so extraction can be reported back as a consumption request (see production.ts / state.ts pendingConsumptionByResourceId). */
+  readonly resourceId: string;
   readonly locationId: string;
   readonly resourceType: string;
   readonly availableAmount: number;
@@ -38,6 +40,7 @@ export const defaultEcologyResourceAdapter: EcologyResourceAdapter = {
     if (!ecology) return [];
     return Object.values(ecology.resources)
       .map((resource) => ({
+        resourceId: resource.resourceId,
         locationId: resource.location,
         resourceType: resource.resourceType,
         availableAmount: resource.availableAmount,

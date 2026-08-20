@@ -16,6 +16,7 @@
  */
 
 import { WorldState } from "../core/state/worldState";
+import { ECONOMY_MODULE_KEY, EconomyState } from "../economy/state";
 
 /* ---------------------------------------------------------------------- */
 /* Team 06 — NPC / individual adapter                                      */
@@ -144,6 +145,45 @@ export function abundanceAt(resources: readonly LocationResourceSnapshot[], loca
   const found = resources.find((r) => r.locationId === locationId);
   return found ? found.abundance : DEFAULT_ABUNDANCE;
 }
+
+/* ---------------------------------------------------------------------- */
+/* Team 09 — economy / settlement stock adapter (read-only, gap #2)        */
+/* ---------------------------------------------------------------------- */
+
+/**
+ * NOT part of `SocietyAdapters` / the main `societyTick` — Society runs
+ * *before* Economy each pipeline tick (see defaultSimulationPipeline.ts),
+ * so reading Team 09's state from inside `societyTick` would always be one
+ * tick stale. Instead this adapter is consumed by a separate reconciliation
+ * step (`reconcileEconomicStock`, see ./economyReconciliation.ts) that the
+ * composition root appends to the pipeline *after* Economy, so the figure
+ * reflects the current tick. Per project convention (see economy/
+ * contracts.ts), this reads the real, already-merged Team 09 module shape
+ * directly rather than a placeholder duck-typed shape, since Team 09 is
+ * already in the repo.
+ */
+export interface SettlementStockSnapshot {
+  readonly settlementId: string;
+  /** Sum of every resourceType this settlement holds in Team 09's EconomyState.stocks. */
+  readonly totalStock: number;
+}
+
+export interface EconomyAdapter {
+  listSettlementStocks(state: WorldState): readonly SettlementStockSnapshot[];
+}
+
+export const defaultEconomyAdapter: EconomyAdapter = {
+  listSettlementStocks(state: WorldState): readonly SettlementStockSnapshot[] {
+    const economy = state.modules[ECONOMY_MODULE_KEY] as EconomyState | undefined;
+    if (!economy) return [];
+    return Object.keys(economy.stocks)
+      .sort()
+      .map((settlementId) => ({
+        settlementId,
+        totalStock: Object.values(economy.stocks[settlementId]).reduce((sum, quantity) => sum + quantity, 0),
+      }));
+  },
+};
 
 /** Bundle of all three adapters, so subsystems take one parameter instead of three. */
 export interface SocietyAdapters {

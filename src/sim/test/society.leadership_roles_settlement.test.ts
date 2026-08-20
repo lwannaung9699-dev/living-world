@@ -84,7 +84,10 @@ test("12. resource sharing mode is derived from measurable group trust, not hard
 
   const withPool = {
     ...highTrust,
-    groups: { ...highTrust.groups, [groupId]: { ...highTrust.groups[groupId], resources: { pooled: 10 } } },
+    groups: {
+      ...highTrust.groups,
+      [groupId]: { ...highTrust.groups[groupId], resources: { ...highTrust.groups[groupId].resources, pooled: 10 } },
+    },
   };
   const settled = settleResourcePool(withPool, 0.3);
   assert.ok(settled.groups[groupId].resources.pooled < 10);

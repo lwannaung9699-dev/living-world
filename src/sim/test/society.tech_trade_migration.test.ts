@@ -81,8 +81,8 @@ test("23. trade value depends on relative scarcity between groups, not a univers
     ...society,
     groups: {
       ...society.groups,
-      [gA.groupId]: { ...society.groups[gA.groupId], territory: { market: 0.5 }, resources: { pooled: 10 } },
-      [gB.groupId]: { ...society.groups[gB.groupId], territory: { market: 0.5 }, resources: { pooled: 0.5 } },
+      [gA.groupId]: { ...society.groups[gA.groupId], territory: { market: 0.5 }, resources: { ...society.groups[gA.groupId].resources, pooled: 10 } },
+      [gB.groupId]: { ...society.groups[gB.groupId], territory: { market: 0.5 }, resources: { ...society.groups[gB.groupId].resources, pooled: 0.5 } },
     },
     relationships: { "a1::b1": { a: "a1", b: "b1", trust: 0.5, respect: 0, fear: 0, loyalty: 0, friendship: 0, rivalry: 0, obligation: 0, kinship: null, authority: 0, lastEventTick: 0 } },
   };
@@ -106,8 +106,8 @@ test("23b. no trade occurs between groups with no territorial contact", () => {
     ...society,
     groups: {
       ...society.groups,
-      [gA.groupId]: { ...society.groups[gA.groupId], resources: { pooled: 10 } },
-      [gB.groupId]: { ...society.groups[gB.groupId], resources: { pooled: 0 } },
+      [gA.groupId]: { ...society.groups[gA.groupId], resources: { ...society.groups[gA.groupId].resources, pooled: 10 } },
+      [gB.groupId]: { ...society.groups[gB.groupId], resources: { ...society.groups[gB.groupId].resources, pooled: 0 } },
     },
   };
   const after = evaluateTrade(society, 1);

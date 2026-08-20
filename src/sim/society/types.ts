@@ -21,6 +21,19 @@ export interface SocialGroup {
   readonly territory: Readonly<Record<string, number>>;
   readonly resources: {
     readonly pooled: number;
+    /**
+     * Read-only, per-tick-refreshed sum of Team 09's concrete resource
+     * stocks (see ../economy/state.ts EconomyState.stocks) across every
+     * settlement this group owns. Populated by
+     * `reconcileEconomicStock` (see ./economyReconciliation.ts), which
+     * runs after Team 09's economy subsystem in the pipeline (see
+     * defaultSimulationPipeline.ts) — never written by anything in
+     * society/** itself. This is an audit/visibility figure, not a second
+     * source of truth: it never feeds back into `pooled`, and nothing in
+     * society/** should branch on it as if it were spendable currency
+     * (see README.md gap #2 — deliberately unreconciled/unmerged models).
+     */
+    readonly economicStockTotal: number;
   };
   readonly customs: readonly string[];
   readonly normIds: readonly string[];

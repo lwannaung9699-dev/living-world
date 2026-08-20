@@ -1,8 +1,12 @@
 # Team 09 — Economy & Trade
 
-Status: **first slice implemented and tested**, most of the original spec
-still open. Written 2026-08-20 (Session 5). Do not report more than what's
-below as done — check the code, not just this file, if in doubt.
+Status: **first slice implemented and tested; both original integration
+gaps (#1 ecology depletion, #2 Team 07 stock visibility) resolved**, most of
+the original spec (labor, markets, trade routes, taxation, crisis dynamics)
+still open. Written 2026-08-20 (Session 5), gap #1 resolved and gap #2
+opened 2026-08-20/21 (Session 7), gap #2 resolved 2026-08-21 (Session 7,
+continued). Do not report more than what's below as done — check the code,
+not just this file, if in doubt.
 
 ## What's real (implemented + covered by `src/sim/test/economy/economy.test.ts`)
 
@@ -46,22 +50,64 @@ below as done — check the code, not just this file, if in doubt.
 
 ## Known integration gaps (real, open, not hidden)
 
-1. **Extraction doesn't actually deplete Team 05's ecology resource.**
-   `harvestForSettlements` reads `EcologicalResource.availableAmount` only
-   as a ceiling on what a settlement could plausibly draw — it never calls
-   ecology's own `consumeResource` to write the depletion back into
-   `state.modules.ecology`, because that would mean Economy mutating
-   another team's module state (against this team's own brief). A real fix
-   needs a consumption-request path Team 05 accepts from external callers,
-   mirroring how Team 06 individuals already consume ecology resources
-   internally. Until that lands, Team 05's resources and Team 09's harvest
-   ceiling can drift apart across a long run.
-2. **Team 09's stocks and Team 07's `SocialGroup.resources.pooled` are two
-   separate, unreconciled numbers.** A settlement's "wealth" as Team 07's
-   trade stub sees it and its concrete resource stock as Team 09 tracks it
-   do not affect each other. Unifying them (or deciding they should stay
-   separate, with Team 07's pool becoming a derived/summary view of Team
-   09's real stocks) is an open design question, not just an open task.
+1. ~~**Extraction doesn't actually deplete Team 05's ecology resource.**~~
+   **RESOLVED (Session 7, 2026-08-21).** `harvestForSettlements` still only
+   *reads* `EcologicalResource.availableAmount` as a ceiling — Economy still
+   never calls `consumeResource` or writes into `state.modules.ecology`
+   directly (that constraint from Team 09's brief is unchanged). Instead:
+   every tick, the total harvested per Team 05 `resourceId` is recorded into
+   `EconomyState.pendingConsumptionByResourceId` (replaced, not
+   accumulated, each tick — see `production.ts`). `EcologyTickContext` now
+   accepts an injectable `externalDemandsProvider` (see `ecology/
+   subsystem.ts`) that feeds arbitrary external `ConsumptionDemand`s into
+   ecology's own `resolveConsumption` pass, resolved fairly alongside
+   herbivory/predation. `defaultSimulationPipeline.ts` (the composition
+   root — the only file allowed to depend on both teams) wires a default
+   provider that reads `state.modules.economy.pendingConsumptionByResourceId`.
+   Because Ecology runs *before* Economy each tick, this reads last tick's
+   committed harvest — a deliberate one-tick lag, not a bug, that preserves
+   single-writer-per-module semantics for both teams. Covered by
+   `src/sim/test/economy/economy.test.ts` ("Team 09 settlement harvesting
+   actually depletes Team 05's ecology resource pool ... (gap #1)").
+   Remaining follow-up: emergent settlement formation is not guaranteed
+   within a short tick budget, so the pipeline-level assertion in that test
+   falls back to directly exercising the bridge when no settlement forms —
+   a longer-running scenario test (or a way to force settlement formation)
+   would give stronger end-to-end evidence.
+2. ~~**Team 09's stocks and Team 07's `SocialGroup.resources.pooled` are two
+   separate, unreconciled numbers.**~~ **RESOLVED as an explicit
+   audit/visibility reconciliation (Session 7, 2026-08-21) — deliberately
+   NOT a merge.** `SocialGroup.resources.pooled` (Team 07's own abstract
+   trade-stub number, still driven only by `society/economy.ts`'s
+   sharing/trade logic) and Team 09's concrete `stocks` remain two
+   independent numbers with independent write paths — merging them was
+   rejected as a design direction, per the open question this gap used to
+   pose. Instead, a third, purely-derived field,
+   `SocialGroup.resources.economicStockTotal`, was added: a read-only,
+   per-tick-refreshed sum of Team 09's real stock across every settlement a
+   group owns (join key: `Settlement.groupId` ↔ `Settlement.settlementId`).
+   New adapter `EconomyAdapter` / `defaultEconomyAdapter` in
+   `society/contracts.ts` reads the real, already-merged Team 09
+   `EconomyState.stocks` shape directly (same convention as this file's own
+   Team 05/07 adapters). New function `reconcileEconomicStock` (see
+   `society/economyReconciliation.ts`) does the summing and is the only
+   thing that ever writes `economicStockTotal` — `pooled` is never read or
+   written by it. Wired into `defaultSimulationPipeline.ts` as a **new,
+   final** pipeline step, appended *after* `createEconomySubsystemTick`
+   (not inside `createSocietyTick`, which still runs *before* Economy each
+   tick) — so unlike gap #1's ecology bridge, this reconciliation needs no
+   one-tick lag and always reflects the current tick's committed economy
+   stock. Groups that own no settlement get `economicStockTotal: 0`, not
+   `undefined` or a stale value. Covered by two new tests in
+   `src/sim/test/economy/economy.test.ts`: a direct unit test of
+   `reconcileEconomicStock` (sum-per-group, `pooled` untouched, zero for a
+   settlement-less group), and a pipeline-level test that forces a known
+   decay amount and asserts `economicStockTotal` matches the *post*-decay
+   figure, not the pre-tick one (proving the no-lag wiring, not just the
+   arithmetic). Full suite run in-session: **491/491 passing**
+   (`tsx --test "src/sim/test/**/*.test.ts"`, executed directly — no
+   network/npm install available in this sandbox, see GitHub sync status in
+   the Master Project's Continue Here block).
 3. **No settlement→locationId resolution nuance.** A settlement harvests
    only resources exactly at its own `locationId` — no hinterland/catchment
    radius, no competition between multiple settlements drawing on the same
@@ -71,11 +117,18 @@ below as done — check the code, not just this file, if in doubt.
 
 ## Next actual steps, in likely order
 
-1. Decide on and implement the Team 05 consumption-request adapter (gap #1)
-   before building anything that depends on extraction being "real" against
-   ecology (crisis/famine detection especially needs this to be honest).
-2. Individual-level labor: who works, what they produce, tied to Team 06
+1. ~~Decide on and implement the Team 05 consumption-request adapter (gap
+   #1)~~ Done (Session 7) — see above. A stronger long-run scenario test
+   proving depletion via genuine emergent settlement formation (not the
+   direct-bridge fallback) is a reasonable near-term follow-up.
+2. ~~Decide on and implement Team 07 stock visibility (gap #2)~~ Done
+   (Session 7) — see above. Reconciliation only runs at the end of the
+   pipeline; if a future consumer needs `economicStockTotal` mid-tick (e.g.
+   from inside `societyTick` itself) it will still read last tick's value —
+   not currently a problem since nothing in `society/**` reads it yet.
+3. Individual-level labor: who works, what they produce, tied to Team 06
    individuals via a read-only adapter (same pattern as `contracts.ts`).
-3. Only after labor exists does pricing/markets/trade become meaningful —
+   This is genuinely the next open item — nothing above blocks it anymore.
+4. Only after labor exists does pricing/markets/trade become meaningful —
    building a market on top of population-scaled auto-harvest alone would
    be economically hollow.

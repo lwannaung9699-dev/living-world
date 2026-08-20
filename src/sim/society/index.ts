@@ -70,3 +70,4 @@ export { applyInnovation, applyTechnologyDiffusion } from "./technology";
 export { evaluateMigration } from "./migration";
 export { updateInstitutions, isStableInstitution, hostilityPosture } from "./institutions";
 export { computeCivilizationMetrics } from "./civilization";
+export { reconcileEconomicStock } from "./economyReconciliation";

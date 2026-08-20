@@ -38,6 +38,17 @@ export interface EconomyState {
   readonly stocks: ResourceStockRecord;
   readonly harvestedTotal: ResourceLedgerRecord;
   readonly decayedTotal: ResourceLedgerRecord;
+  /**
+   * This tick's harvested amount per Team 05 `resourceId` (replaced, not
+   * accumulated, every tick — it represents "what Economy drew this tick",
+   * not a running total). Team 05's ecology subsystem reads this (one tick
+   * later, via the pipeline's externalDemandsProvider — see
+   * defaultSimulationPipeline.ts) as external consumption demand against its
+   * own resource pool, so extraction is actually subtracted from the
+   * regenerating source instead of only being reflected in Economy's own
+   * stocks. See production.ts and README.md gap #1 (now resolved).
+   */
+  readonly pendingConsumptionByResourceId: ResourceLedgerRecord;
 }
 
 export function createInitialEconomyState(): EconomyState {
@@ -46,6 +57,7 @@ export function createInitialEconomyState(): EconomyState {
     stocks: {},
     harvestedTotal: {},
     decayedTotal: {},
+    pendingConsumptionByResourceId: {},
   };
 }
 
@@ -61,6 +73,7 @@ export function validateEconomyState(value: unknown): asserts value is EconomySt
     [state.stocks, "stocks"],
     [state.harvestedTotal, "harvestedTotal"],
     [state.decayedTotal, "decayedTotal"],
+    [state.pendingConsumptionByResourceId, "pendingConsumptionByResourceId"],
   ] as const) {
     if (typeof key !== "object" || key === null) {
       throw new InvalidStateError(`EconomyState.${label} must be an object`);
@@ -81,6 +94,7 @@ export function validateEconomyState(value: unknown): asserts value is EconomySt
   for (const [label, record] of [
     ["harvestedTotal", state.harvestedTotal!],
     ["decayedTotal", state.decayedTotal!],
+    ["pendingConsumptionByResourceId", state.pendingConsumptionByResourceId!],
   ] as const) {
     for (const [resourceType, total] of Object.entries(record)) {
       if (typeof total !== "number" || !Number.isFinite(total) || total < 0) {

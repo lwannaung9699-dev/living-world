@@ -30,7 +30,7 @@ export function createGroup(
     leaderIds: [],
     sharedGoals: [],
     territory: {},
-    resources: { pooled: 0 },
+    resources: { pooled: 0, economicStockTotal: 0 },
     customs: [],
     normIds: [],
     identitySymbolIds: [],

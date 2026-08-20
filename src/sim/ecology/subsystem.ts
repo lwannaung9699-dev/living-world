@@ -45,6 +45,19 @@ export interface EcologyTickContext {
   readonly diseaseUpdateEveryNTicks?: number;
   /** Average trait-variance threshold above which a SpeciationSignal is emitted for a population. Default 0.5. */
   readonly speciationDivergenceThreshold?: number;
+  /**
+   * Optional source of consumption demands from outside ecology (e.g. Team
+   * 09 Economy harvesting settlements) — kept as an injected function
+   * rather than an import so `src/sim/ecology` never depends on another
+   * team's module (project rules #24-25). Each returned demand's `targetId`
+   * must be an ecology `resourceId`; it is resolved together with
+   * herbivory/predation demands via the same fair-share `resolveConsumption`
+   * pass, so external and biological consumers compete for the same supply
+   * consistently. The composition root (defaultSimulationPipeline.ts) is
+   * responsible for wiring this to a real cross-team adapter. Defaults to
+   * no external demand.
+   */
+  readonly externalDemandsProvider?: (state: WorldState) => readonly ConsumptionDemand[];
 }
 
 function environmentFor(location: string, context: EcologyTickContext): EcologicalEnvironment {
@@ -134,6 +147,17 @@ export function createEcologySubsystem(context: EcologyTickContext = {}): Subsys
       } else if (interaction.type === "herbivory" || interaction.type === "resource_consumption" || interaction.type === "scavenging") {
         const traits = biologyFor(source, context).averageTraits;
         demands.push(computeHerbivoryDemand(interaction, source, traits, interactionRng));
+      }
+    }
+
+    // External (non-biological) demand, e.g. Team 09 settlements harvesting
+    // — only ever targets resources (never populations), resolved fairly
+    // alongside herbivory/predation in the same pass. See EcologyTickContext.
+    if (context.externalDemandsProvider) {
+      for (const demand of context.externalDemandsProvider(state)) {
+        if (demand.amount > 0 && disturbedResources[demand.targetId]) {
+          demands.push(demand);
+        }
       }
     }
 

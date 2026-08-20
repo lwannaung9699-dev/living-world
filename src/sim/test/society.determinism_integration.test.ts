@@ -145,8 +145,8 @@ test("26. execution-order independence: subsystem outcome does not depend on Rec
   const societyOrderA = {
     ...society,
     groups: {
-      "group-b": { groupId: "group-b", memberIds: ["y1"], founderIds: ["y1"], leaderIds: [], sharedGoals: [], territory: {}, resources: { pooled: 0 }, customs: [], normIds: [], identitySymbolIds: [], foundedTick: 0, tension: 0, parentGroupId: null, active: true },
-      "group-a": { groupId: "group-a", memberIds: ["x1"], founderIds: ["x1"], leaderIds: [], sharedGoals: [], territory: {}, resources: { pooled: 0 }, customs: [], normIds: [], identitySymbolIds: [], foundedTick: 0, tension: 0, parentGroupId: null, active: true },
+      "group-b": { groupId: "group-b", memberIds: ["y1"], founderIds: ["y1"], leaderIds: [], sharedGoals: [], territory: {}, resources: { pooled: 0, economicStockTotal: 0 }, customs: [], normIds: [], identitySymbolIds: [], foundedTick: 0, tension: 0, parentGroupId: null, active: true },
+      "group-a": { groupId: "group-a", memberIds: ["x1"], founderIds: ["x1"], leaderIds: [], sharedGoals: [], territory: {}, resources: { pooled: 0, economicStockTotal: 0 }, customs: [], normIds: [], identitySymbolIds: [], foundedTick: 0, tension: 0, parentGroupId: null, active: true },
     },
   };
   const societyOrderB = {
@@ -179,7 +179,7 @@ test("27. serialization: SocietyState round-trips through canonicalStringify/JSO
         leaderIds: ["a"],
         sharedGoals: ["survive"],
         territory: { home: 0.6 },
-        resources: { pooled: 3.5 },
+        resources: { pooled: 3.5, economicStockTotal: 0 },
         customs: ["greet-elders"],
         normIds: [],
         identitySymbolIds: [],

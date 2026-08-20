@@ -20,14 +20,21 @@ import { createSocietyTick } from "../society/tick";
 import type {
   BiologyAdapter,
   EcologyAdapter,
+  EconomyAdapter,
   IndividualSnapshot,
   KinshipFact,
   SocietyAdapters,
 } from "../society/contracts";
+import { defaultEconomyAdapter } from "../society/contracts";
+import { readSocietyState, writeSocietyState } from "../society/state";
+import { reconcileEconomicStock } from "../society/economyReconciliation";
 import { politicsTick } from "../politics/tick";
 import type { CreatureState } from "../creature/state/creatureState";
 import { createEconomySubsystemTick } from "../economy/tick";
 import type { EconomyTickOptions } from "../economy/tick";
+import { ECONOMY_MODULE_KEY } from "../economy/state";
+import type { EconomyState } from "../economy/state";
+import type { ConsumptionDemand } from "../ecology/consumption";
 
 /** Configuration for the canonical Team 01–08 tick pipeline. */
 export interface DefaultSimulationPipelineOptions {
@@ -47,6 +54,8 @@ export interface DefaultSimulationPipelineOptions {
   readonly societyAdapters?: SocietyAdapters;
   /** Optional explicit Team 09 adapters/config. Defaults to state-backed adapters reading real Team 05/07 state. */
   readonly economyOptions?: EconomyTickOptions;
+  /** Optional explicit Team 07↔09 stock-reconciliation adapter (README.md gap #2). Defaults to reading the real Team 09 economy module. */
+  readonly economyStockAdapter?: EconomyAdapter;
   /** Foundation tick duration override. */
   readonly tickDurationSeconds?: number;
 }
@@ -98,13 +107,21 @@ export function createDefaultSimulationPipeline(
       }
     : creatureSubsystem;
 
+  const ecologyContext: EcologyTickContext = {
+    ...options.ecologyContext,
+    externalDemandsProvider: options.ecologyContext?.externalDemandsProvider ?? economyExternalDemandsProvider,
+  };
+
+  const economyStockAdapter = options.economyStockAdapter ?? defaultEconomyAdapter;
+
   const subsystems: SubsystemTickFn[] = [
     createBiologySubsystem(options.speciesRegistry ?? {}, options.biologyOptions),
-    createEcologySubsystem(options.ecologyContext),
+    createEcologySubsystem(ecologyContext),
     stateAwareCreatureSubsystem,
     createSocietyTick({ adapters: societyAdapters }),
     politicsTick,
     createEconomySubsystemTick(options.economyOptions),
+    createSocietyEconomyReconciliationTick(economyStockAdapter),
   ];
 
   return {
@@ -136,6 +153,57 @@ export function createFullSimulationPipeline(
   const run = (seed: WorldSeed, ticks: number): WorldState => runFromState(createInitialState(seed), ticks);
 
   return { context, createInitialState, run, runFromState };
+}
+
+/**
+ * Default `EcologyTickContext.externalDemandsProvider` — bridges Team 09
+ * (Economy) harvesting into Team 05's (Ecology) own consumption resolution.
+ *
+ * Ecology runs before Economy in the per-tick order (see the pipeline
+ * below), so at the moment ecology's subsystem reads `state` here, `state.
+ * modules.economy` still holds whatever Economy last committed — i.e. LAST
+ * tick's harvest (`EconomyState.pendingConsumptionByResourceId`, which
+ * Economy replaces every tick with only that tick's draw; see
+ * economy/production.ts). This is a deliberate one-tick lag, not a bug: it
+ * lets each module remain the sole writer of its own `state.modules[key]`
+ * slice every tick (Team 05 still only ever writes `state.modules.ecology`;
+ * Team 09 still only ever writes `state.modules.economy`) while still
+ * composing the two into one coherent, eventually-consistent resource flow.
+ */
+/**
+ * Team 07↔09 stock reconciliation (README.md gap #2 — resolved as a
+ * read-only summary, not a merge; see society/economyReconciliation.ts).
+ *
+ * Appended *after* `createEconomySubsystemTick` in the per-tick order, so
+ * — unlike the Ecology↔Economy bridge above, which needs a one-tick lag
+ * because Ecology runs *before* Economy — this step sees the current
+ * tick's freshly-committed `state.modules.economy` and can populate
+ * `SocialGroup.resources.economicStockTotal` with no lag. It still only
+ * ever writes `state.modules.society` (via `writeSocietyState`), so Team
+ * 07 remains the sole writer of its own module slice; Team 09's `stocks`
+ * and `pooled` remain untouched and unreconciled with each other, per the
+ * README's explicit gap #2 design decision.
+ */
+function createSocietyEconomyReconciliationTick(adapter: EconomyAdapter): SubsystemTickFn {
+  return function societyEconomyReconciliationTick(state: WorldState): WorldState {
+    const society = readSocietyState(state);
+    const reconciled = reconcileEconomicStock(society, state, adapter);
+    return writeSocietyState(state, reconciled);
+  };
+}
+
+function economyExternalDemandsProvider(state: WorldState): readonly ConsumptionDemand[] {
+  const economy = state.modules[ECONOMY_MODULE_KEY] as EconomyState | undefined;
+  if (!economy) return [];
+  return Object.entries(economy.pendingConsumptionByResourceId)
+    .filter(([, amount]) => amount > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([resourceId, amount]) => ({
+      interactionId: `economy/harvest/${resourceId}`,
+      consumerId: "economy:settlements",
+      targetId: resourceId,
+      amount,
+    }));
 }
 
 /**
