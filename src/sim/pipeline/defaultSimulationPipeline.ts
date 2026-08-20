@@ -26,6 +26,8 @@ import type {
 } from "../society/contracts";
 import { politicsTick } from "../politics/tick";
 import type { CreatureState } from "../creature/state/creatureState";
+import { createEconomySubsystemTick } from "../economy/tick";
+import type { EconomyTickOptions } from "../economy/tick";
 
 /** Configuration for the canonical Team 01–08 tick pipeline. */
 export interface DefaultSimulationPipelineOptions {
@@ -43,6 +45,8 @@ export interface DefaultSimulationPipelineOptions {
   readonly creatureEnvironment?: EnvironmentQuery;
   /** Optional explicit Team 07 adapters. Defaults to state-backed adapters below. */
   readonly societyAdapters?: SocietyAdapters;
+  /** Optional explicit Team 09 adapters/config. Defaults to state-backed adapters reading real Team 05/07 state. */
+  readonly economyOptions?: EconomyTickOptions;
   /** Foundation tick duration override. */
   readonly tickDurationSeconds?: number;
 }
@@ -100,6 +104,7 @@ export function createDefaultSimulationPipeline(
     stateAwareCreatureSubsystem,
     createSocietyTick({ adapters: societyAdapters }),
     politicsTick,
+    createEconomySubsystemTick(options.economyOptions),
   ];
 
   return {

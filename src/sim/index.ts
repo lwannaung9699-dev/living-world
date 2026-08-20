@@ -69,6 +69,13 @@ export * from "./society";
 // neither has landed yet. See src/sim/politics/index.ts.
 export * from "./politics";
 
+// --- Team 09 (Economy & Trade) ------------------------------------------------
+// Consumes Team 05 (ecology resources) and Team 07 (settlements) only
+// through its own read-only adapters (see src/sim/economy/contracts.ts).
+// First slice only — production/storage/conservation. See
+// src/sim/economy/README.md for exactly what is and isn't built yet.
+export * from "./economy";
+
 // --- Canonical Team 01–08 pipeline ------------------------------------------
 // Worldgen remains a one-time bootstrap; this helper composes all tickable
 // domains in dependency order: Biology → Ecology → Creature → Society → Politics.

@@ -22,15 +22,22 @@
  *    trust fields — it has `personality: PersonalityTraits` (aggression,
  *    caution, curiosity, sociability, riskTolerance, patience,
  *    territoriality, independence, boldness).
- *  - Critically, **Team 07's `SocialGroup.memberIds` are Team 07's own
- *    synthetic `individualId` strings, not real Team 06 `creatureId`s** —
- *    grepping Team 07's source confirms it never imports or reads
- *    `CREATURE_MODULE_KEY`/`state.modules.creature` anywhere. Team 06 and
- *    Team 07 are not wired to each other yet (Team 07's own Notion page
- *    self-reports this: it built its own no-op NpcAdapter). So there is, as
- *    of this reconciliation, no path to real per-individual behavioral
- *    trait data for a real Team 07 population member — that data simply
- *    doesn't exist yet anywhere upstream.
+ *  - UPDATED 2026-08-20: Team 06 and Team 07 are now wired to each other
+ *    when the canonical `defaultSimulationPipeline` is used. That pipeline's
+ *    `createStateBackedSocietyAdapters()` implements `npc.listIndividuals()`
+ *    by reading real `CreatureModuleState.creatures` and mapping
+ *    `id: creature.creatureId` — a real Team 06 id, not synthetic.
+ *    `society/tick.ts` feeds those individuals into
+ *    `formGroupsFromTrustClusters()`, and `groups.ts`'s `createGroup()` sets
+ *    `SocialGroup.memberIds` directly from those real ids. So
+ *    **`SocialGroup.memberIds` are real Team 06 `creatureId`s whenever the
+ *    default/full pipeline is used** — confirmed by reading the code, not
+ *    just trusting a status label.
+ *  - What's still missing: per-individual behavioral trait data (influence,
+ *    militaryStrength, kinship, religiousStanding, knowledge, trust) has no
+ *    real upstream source — `CreatureState` has no matching fields yet, so
+ *    those traits are still derived synthetically per real individualId
+ *    (see `traitsAreSynthetic` below). Real identities, synthetic traits.
  *
  * Given that, this adapter now does the honest thing at each layer:
  *  1. Settlement-level structure (population, wealth, cohesion, the roster
