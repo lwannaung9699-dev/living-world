@@ -31,8 +31,16 @@ export function createEconomySubsystemTick(options: EconomyTickOptions = {}) {
 
     const settlements = adapters.settlements.listSettlements(state);
     const harvestable = adapters.ecology.listHarvestableResources(state);
+    const laborers = adapters.labor.listLaborers(state);
 
-    economy = harvestForSettlements(economy, settlements, harvestable, rng.fork("economy/harvest"), options.harvest);
+    economy = harvestForSettlements(
+      economy,
+      settlements,
+      harvestable,
+      rng.fork("economy/harvest"),
+      options.harvest,
+      laborers,
+    );
     economy = decayStocks(economy, options.decay);
 
     return { ...state, modules: writeEconomyState(state.modules, economy) };

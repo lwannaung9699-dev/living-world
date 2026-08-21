@@ -66,7 +66,7 @@ test("28b. import isolation: src/sim/society never reaches into Team 02/03/04/05
 test("29. Team 01 integration: societyTick is a valid SubsystemTickFn, composes cleanly into tick()/tickN(), and only ever touches modules.society", () => {
   const seed = createWorldSeed({ seed: "team01-integration" });
   let state = createInitialWorldState(seed);
-  state = { ...state, modules: { ...state.modules, npc: { individuals: [] }, biology: { kinshipFacts: [] }, ecology: { locationResources: [] } } };
+  state = { ...state, modules: { ...state.modules, creature: { creatures: {} }, biology: { kinshipFacts: [] }, ecology: { locationResources: [] } } };
 
   const before = JSON.parse(canonicalStringify(state.modules)) as Record<string, unknown>;
   const after = tickN(state, 5, { subsystems: [societyTick] });
@@ -95,11 +95,49 @@ test("29b. Team 01 integration: readSocietyState/writeSocietyState round-trip th
 
 test("30. Team 06 integration: societyTick reads individuals only through the NpcAdapter contract, and runs as a safe no-op when Team 06's module is absent", () => {
   const seed = createWorldSeed({ seed: "no-npc-module" });
-  const state = createInitialWorldState(seed); // deliberately no modules.npc at all
+  const state = createInitialWorldState(seed); // deliberately no modules.creature at all
   const after = tick(state, { subsystems: [societyTick] });
   const society = readSocietyState(after);
   assert.equal(Object.keys(society.groups).length, 0);
   assert.equal(Object.keys(society.relationships).length, 0);
+});
+
+test("30c. Team 06 integration (real wiring): defaultNpcAdapter reads real state.modules.creature.creatures, not the old placeholder state.modules.npc.individuals", () => {
+  const seed = createWorldSeed({ seed: "real-creature-wiring" });
+  let state = createInitialWorldState(seed);
+  // Shaped like Team 06's real CreatureModuleState / CreatureState (duck-typed fields only — no static import of Team 06 types, matching adapter isolation).
+  state = {
+    ...state,
+    modules: {
+      ...state.modules,
+      creature: {
+        creatures: {
+          c1: { creatureId: "c1", position: { x: 1, y: 1 }, personality: { sociability: 0.9, aggression: 0.1, riskTolerance: 0.5, independence: 0.5, boldness: 0.5, patience: 0.5, territoriality: 0.5 } },
+          c2: { creatureId: "c2", position: { x: 2, y: 2 }, personality: { sociability: 0.9, aggression: 0.1, riskTolerance: 0.5, independence: 0.5, boldness: 0.5, patience: 0.5, territoriality: 0.5 } },
+        },
+      },
+      // Old placeholder key left populated on purpose, to prove the adapter no longer reads it.
+      npc: { individuals: [{ id: "should-be-ignored", alive: true, locationId: "loc", traits: { sociability: 1, aggression: 0, ambition: 1, empathy: 1 } }] },
+    },
+  };
+
+  assert.deepEqual(
+    defaultSocietyAdapters.npc.listIndividuals(state).map((i) => i.id).sort(),
+    ["c1", "c2"],
+    "expected the real Team 06 creature ids, not the ignored legacy npc.individuals entry",
+  );
+
+  const after = tickN(state, 30, { subsystems: [societyTick] });
+  const society = readSocietyState(after);
+  // c1/c2 are close together (same 20-unit grid cell) and highly sociable/non-aggressive — over 30 ticks they should form a real relationship/group keyed by their real creatureIds.
+  const allMemberIds = Object.values(society.groups).flatMap((g) => g.memberIds);
+  assert.ok(
+    Object.keys(society.relationships).length > 0 || allMemberIds.length > 0,
+    "expected real creature ids c1/c2 to show up in relationships or group membership after 30 ticks",
+  );
+  for (const id of allMemberIds) {
+    assert.ok(id === "c1" || id === "c2", `expected only real creatureIds in group membership, got "${id}"`);
+  }
 });
 
 test("30b. Team 06 integration: a custom NpcAdapter can be supplied (e.g. from a future Team 06 real module) via createSocietyTick", () => {
@@ -123,14 +161,15 @@ test("30b. Team 06 integration: a custom NpcAdapter can be supplied (e.g. from a
 
 test("25. deterministic replay: identical seed + identical tick count reproduces an identical society state and hash", () => {
   const seed = createWorldSeed({ seed: "replay-check" });
-  const individuals = [
-    { id: "p1", alive: true, locationId: "camp", traits: { sociability: 0.7, aggression: 0.4, ambition: 0.5, empathy: 0.6 } },
-    { id: "p2", alive: true, locationId: "camp", traits: { sociability: 0.6, aggression: 0.5, ambition: 0.4, empathy: 0.5 } },
-    { id: "p3", alive: true, locationId: "camp", traits: { sociability: 0.5, aggression: 0.6, ambition: 0.6, empathy: 0.4 } },
-  ];
+  // Real Team 06 CreatureState shape (duck-typed), all within the same 20-unit grid cell so they resolve to one locationId.
+  const creatures = {
+    p1: { creatureId: "p1", position: { x: 3, y: 3 }, personality: { sociability: 0.7, aggression: 0.4, riskTolerance: 0.5, independence: 0.5, boldness: 0.5, patience: 0.5, territoriality: 0.4 } },
+    p2: { creatureId: "p2", position: { x: 4, y: 4 }, personality: { sociability: 0.6, aggression: 0.5, riskTolerance: 0.4, independence: 0.5, boldness: 0.5, patience: 0.5, territoriality: 0.4 } },
+    p3: { creatureId: "p3", position: { x: 5, y: 5 }, personality: { sociability: 0.5, aggression: 0.6, riskTolerance: 0.6, independence: 0.4, boldness: 0.5, patience: 0.4, territoriality: 0.5 } },
+  };
   function run(): unknown {
     let state = createInitialWorldState(seed);
-    state = { ...state, modules: { ...state.modules, npc: { individuals }, biology: { kinshipFacts: [] }, ecology: { locationResources: [{ locationId: "camp", abundance: 0.5 }] } } };
+    state = { ...state, modules: { ...state.modules, creature: { creatures }, biology: { kinshipFacts: [] }, ecology: { locationResources: [{ locationId: "cell:0,0", abundance: 0.5 }] } } };
     return tickN(state, 40, { subsystems: [societyTick] });
   }
   const runA = run();

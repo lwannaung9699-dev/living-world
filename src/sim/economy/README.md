@@ -1,12 +1,14 @@
 # Team 09 — Economy & Trade
 
 Status: **first slice implemented and tested; both original integration
-gaps (#1 ecology depletion, #2 Team 07 stock visibility) resolved**, most of
-the original spec (labor, markets, trade routes, taxation, crisis dynamics)
+gaps (#1 ecology depletion, #2 Team 07 stock visibility) resolved, plus a
+first real Team 06 individual-labor signal wired in (2026-08-21)**, most
+of the original spec (markets, trade routes, taxation, crisis dynamics)
 still open. Written 2026-08-20 (Session 5), gap #1 resolved and gap #2
 opened 2026-08-20/21 (Session 7), gap #2 resolved 2026-08-21 (Session 7,
-continued). Do not report more than what's below as done — check the code,
-not just this file, if in doubt.
+continued), individual-level labor adapter added 2026-08-21 (Session 9).
+Do not report more than what's below as done — check the code, not just
+this file, if in doubt.
 
 ## What's real (implemented + covered by `src/sim/test/economy/economy.test.ts`)
 
@@ -15,6 +17,22 @@ not just this file, if in doubt.
 - **Production/extraction**: each settlement harvests a bounded, population-
   scaled amount of each resource type available at its location (read
   read-only from Team 05 ecology), added to its own stock.
+- **Individual labor (first slice)**: a new `LaborAdapter` /
+  `defaultLaborAdapter` (`contracts.ts`) reads Team 06's real
+  `CreatureState` (via its own public `getCreatureModuleState` helper — no
+  guessed shape) and lists every creature currently performing a real
+  `"gather"` action, with a per-creature `effort` derived from real
+  `energy`/`fatigue`. `harvestForSettlements` (`production.ts`) uses the
+  summed real laborer effort at a settlement's location to raise that
+  settlement's population-based harvest cap (`laborBonusPerEffort`,
+  default 0.15 — i.e. +15% cap per unit of summed effort). This is
+  additive and fully backward compatible: an empty/omitted laborer list
+  leaves every pre-existing formula and test byte-for-byte unchanged
+  (verified — see "harvestForSettlements: ... an empty laborers list
+  leaves the pre-labor formula exactly unchanged" in the test file).
+  Scoped honestly: there is still no employment/wages/skills system
+  anywhere upstream — this reads the one real "an individual is doing
+  labor right now" signal Team 06 actually models, nothing more.
 - **Storage decay**: a configurable per-resourceType fractional loss per
   tick.
 - **Conservation invariant, tested**: for every resourceType, at every
@@ -33,16 +51,15 @@ not just this file, if in doubt.
 
 ## What's explicitly NOT built yet — do not assume these exist
 
-- **Labor, wages, skills, employment.** No individual-level economic
-  participation at all yet — extraction is settlement-level and population-
-  scaled only.
-- **Markets, pricing, currency.** No price discovery, no notion of value
-  beyond raw quantity.
+- **Wages, skills, employment relationships, currency, markets, pricing.**
+  Labor (above) is real but minimal: a binary "gathering or not" signal
+  plus a derived effort scalar. No notion of who employs whom, what a
+  laborer is "paid," or price discovery.
 - **Trade routes, transportation, inter-settlement exchange of Team 09's
   own stocks.** (Team 07 has its own *separate*, abstract, single-number
   `SocialGroup.resources.pooled` trade stub in `society/economy.ts` —
-  unrelated to this module; the two are not reconciled. See "Known
-  integration gaps" below.)
+  unrelated to this module; the two are not reconciled beyond the
+  read-only `economicStockTotal` summary — see gap #2 below.)
 - **Taxation.**
 - **Crisis dynamics**: famine, price shocks, shortages, economic collapse.
 - **Replay/performance evidence** beyond what the standard test suite
@@ -126,9 +143,17 @@ not just this file, if in doubt.
    pipeline; if a future consumer needs `economicStockTotal` mid-tick (e.g.
    from inside `societyTick` itself) it will still read last tick's value —
    not currently a problem since nothing in `society/**` reads it yet.
-3. Individual-level labor: who works, what they produce, tied to Team 06
-   individuals via a read-only adapter (same pattern as `contracts.ts`).
-   This is genuinely the next open item — nothing above blocks it anymore.
+3. ~~Individual-level labor: who works, what they produce, tied to Team 06
+   individuals via a read-only adapter (same pattern as `contracts.ts`).~~
+   Done (Session 9, 2026-08-21) — see "Individual labor (first slice)"
+   above. Real Team 06 `CreatureState`/`getCreatureModuleState` read
+   directly (no guessed shape — see contracts.ts's file header for why
+   that mattered this time). Scoped to a binary gather-action signal plus
+   a real-derived effort scalar; wages/skills/employment remain open.
+   Full suite run in-session: **495/495 passing**
+   (`tsx --test "src/sim/test/**/*.test.ts"`, executed directly against
+   the real repo at commit `b6e44f2` — no network/npm install available in
+   this sandbox).
 4. Only after labor exists does pricing/markets/trade become meaningful —
    building a market on top of population-scaled auto-harvest alone would
    be economically hollow.

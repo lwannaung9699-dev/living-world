@@ -23,11 +23,20 @@
  * ecology's own `resolveConsumption` + `consumeResource`. Team 05 remains
  * the only writer of `state.modules.ecology`; Team 09 remains the only
  * writer of `state.modules.economy`.
+ *
+ * INDIVIDUAL LABOR (2026-08-21): `harvestForSettlements` now takes an
+ * optional `laborers` list (real Team 06 individuals currently performing
+ * a `"gather"` action — see contracts.ts's `LaborAdapter`). Real laborer
+ * effort at a settlement's location raises that settlement's population-
+ * based harvest cap by `laborBonusPerEffort` per unit of summed effort
+ * (see `HarvestOptions`). This is additive and backward compatible: the
+ * default empty `laborers` list (or any location with none) leaves the
+ * cap exactly as it was before this change.
  */
 
 import { DeterministicRng } from "../core/rng/deterministicRng";
 import { EconomyState, sortedEntries } from "./state";
-import { HarvestableResourceSnapshot, SettlementSnapshot } from "./contracts";
+import { HarvestableResourceSnapshot, SettlementSnapshot, LaborerSnapshot } from "./contracts";
 
 export interface HarvestOptions {
   /** Fraction of a location's availableAmount a single settlement may draw from in one tick, before population scaling. Default 0.1 (10%). */
@@ -36,13 +45,34 @@ export interface HarvestOptions {
   readonly perCapitaHarvestCap?: number;
   /** Multiplicative jitter range applied per (settlement, resourceType) draw, e.g. 0.1 = ±10%. Default 0.1. */
   readonly jitterFraction?: number;
+  /**
+   * How much one full unit of real Team 06 laborer `effort` at a
+   * settlement's location adds to that settlement's population-based
+   * harvest cap, as a fraction. E.g. 0.15 with 2 laborers at full effort
+   * (summed effort = 2.0) raises `populationCap` by 30%. Default 0.15.
+   * With no laborers present at a location (summed effort = 0, which is
+   * always true when `laborers` is omitted/empty), this has zero effect —
+   * `populationCap` is unchanged from the pre-labor formula, so every
+   * settlement-only test keeps behaving exactly as before.
+   */
+  readonly laborBonusPerEffort?: number;
 }
 
 const DEFAULT_OPTIONS: Required<HarvestOptions> = {
   maxFractionOfAvailable: 0.1,
   perCapitaHarvestCap: 0.05,
   jitterFraction: 0.1,
+  laborBonusPerEffort: 0.15,
 };
+
+/** Sums real Team 06 laborer effort per locationId — a settlement with no laborers at its location gets 0, leaving the population-only cap untouched. */
+function laborEffortByLocation(laborers: readonly LaborerSnapshot[]): Map<string, number> {
+  const byLocation = new Map<string, number>();
+  for (const laborer of laborers) {
+    byLocation.set(laborer.locationId, (byLocation.get(laborer.locationId) ?? 0) + laborer.effort);
+  }
+  return byLocation;
+}
 
 /**
  * Deterministically harvests resources for every settlement (processed in
@@ -55,8 +85,10 @@ export function harvestForSettlements(
   harvestable: readonly HarvestableResourceSnapshot[],
   rng: DeterministicRng,
   options: HarvestOptions = {},
+  laborers: readonly LaborerSnapshot[] = [],
 ): EconomyState {
   const opts = { ...DEFAULT_OPTIONS, ...options };
+  const laborEffortAtLocation = laborEffortByLocation(laborers);
 
   const byLocation = new Map<string, HarvestableResourceSnapshot[]>();
   for (const resource of harvestable) {
@@ -82,7 +114,8 @@ export function harvestForSettlements(
     for (const resource of resourcesHere) {
       if (resource.availableAmount <= 0) continue;
 
-      const populationCap = settlement.population * opts.perCapitaHarvestCap;
+      const laborBonus = 1 + opts.laborBonusPerEffort * (laborEffortAtLocation.get(settlement.locationId) ?? 0);
+      const populationCap = settlement.population * opts.perCapitaHarvestCap * laborBonus;
       const availabilityCap = resource.availableAmount * opts.maxFractionOfAvailable;
       const baseAmount = Math.min(populationCap, availabilityCap);
       if (baseAmount <= 0) continue;

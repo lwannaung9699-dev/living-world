@@ -7,7 +7,7 @@ import { applyCooperation } from "../society/cooperation";
 import { applyConflict } from "../society/conflict";
 import { createGroup } from "../society/groups";
 import { DeterministicRng } from "../index";
-import { defaultBiologyAdapter, defaultEcologyAdapter } from "../society/contracts";
+import { testBiologyAdapter as defaultBiologyAdapter, testEcologyAdapter as defaultEcologyAdapter } from "./society.testSupport";
 import { buildTestWorldState, makeIndividual } from "./society.testSupport";
 
 test("kinship: syncing a parent/child fact tags the relationship and raises trust/loyalty floors", () => {

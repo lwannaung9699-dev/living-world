@@ -9,7 +9,7 @@ import { SOCIAL_ROLES } from "../society/types";
 import { classifySharingMode, settleResourcePool } from "../society/economy";
 import { updateSettlements, updateTerritory } from "../society/settlement";
 import { buildTestWorldState, makeIndividual } from "./society.testSupport";
-import { defaultEcologyAdapter } from "../society/contracts";
+import { testEcologyAdapter as defaultEcologyAdapter } from "./society.testSupport";
 
 test("10. leadership emerges from multi-factor scoring, not raw strength — an ambitious, trusted member is recognized", () => {
   let society = createInitialSocietyState();

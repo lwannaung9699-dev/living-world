@@ -6,7 +6,7 @@ import { applyInnovation, applyTechnologyDiffusion } from "../society/technology
 import { evaluateTrade } from "../society/economy";
 import { evaluateMigration } from "../society/migration";
 import { DeterministicRng } from "../index";
-import { defaultEcologyAdapter } from "../society/contracts";
+import { testEcologyAdapter as defaultEcologyAdapter } from "./society.testSupport";
 import { buildTestWorldState, makeIndividual } from "./society.testSupport";
 
 test("21. innovation is deterministic (not from an AI model / external API) and scales with ambition and scarcity", () => {

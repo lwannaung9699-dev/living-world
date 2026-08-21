@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DeterministicRng } from "../../core/rng/deterministicRng";
+import type { WorldState } from "../../core/state/worldState";
 import {
   createInitialEconomyState,
   validateEconomyState,
@@ -30,6 +31,10 @@ import {
   createGroup,
   reconcileEconomicStock,
   EconomyAdapter,
+  defaultLaborAdapter,
+  LaborerSnapshot,
+  createActionProposal,
+  defaultEconomyAdapters,
 } from "../../index";
 
 function assertConserved(economy: EconomyState, resourceTypes: readonly string[]): void {
@@ -420,3 +425,158 @@ test("Team 07's SocialGroup.resources.economicStockTotal reflects the CURRENT ti
       `read the pre-tick value (45)`,
   );
 });
+
+/* ------------------------------------------------------------------------ */
+/* Team 06 individual labor (README.md "Next actual steps" #3)               */
+/* ------------------------------------------------------------------------ */
+
+function creatureAt(
+  creatureId: string,
+  x: number,
+  y: number,
+  overrides: { actionId?: string; energy?: number; fatigue?: number } = {},
+) {
+  const personality = generatePersonality(DeterministicRng.fromSeed(`labor-test-${creatureId}`, 1));
+  const base = createInitialCreatureState({
+    creatureId,
+    speciesId: "human",
+    position: { x, y },
+    personality,
+    energy: overrides.energy,
+  });
+  const currentAction =
+    overrides.actionId === undefined
+      ? null
+      : createActionProposal({ creatureId, actionId: overrides.actionId, goalId: "gather", score: 1, tick: 0 });
+  return { ...base, currentAction, fatigue: overrides.fatigue ?? base.fatigue };
+}
+
+test("defaultLaborAdapter only lists creatures currently performing a real \"gather\" action, with locationId bucketed the same way as society's IndividualSnapshot", () => {
+  let state = createInitialWorldState(createWorldSeed({ seed: "labor-adapter-filter" }));
+  state = upsertCreature(state, creatureAt("gatherer-1", 5, 5, { actionId: "gather", energy: 100, fatigue: 0 }));
+  state = upsertCreature(state, creatureAt("gatherer-2", 6, 6, { actionId: "gather", energy: 50, fatigue: 50 }));
+  state = upsertCreature(state, creatureAt("rester", 5, 5, { actionId: "rest" }));
+  state = upsertCreature(state, creatureAt("idle", 5, 5)); // currentAction: null
+
+  const laborers = defaultLaborAdapter.listLaborers(state);
+  const ids = laborers.map((l) => l.creatureId);
+
+  assert.deepEqual(ids, ["gatherer-1", "gatherer-2"], "only real \"gather\"-action creatures should be listed");
+
+  const g1 = laborers.find((l) => l.creatureId === "gatherer-1")!;
+  const g2 = laborers.find((l) => l.creatureId === "gatherer-2")!;
+  assert.equal(g1.locationId, "cell:0,0", "position (5,5) with GRID_CELL_SIZE=20 should bucket to cell:0,0");
+  assert.equal(g2.locationId, "cell:0,0", "position (6,6) with GRID_CELL_SIZE=20 should also bucket to cell:0,0");
+  assert.ok(Math.abs(g1.effort - 1) < 1e-9, "full energy (100) + zero fatigue should give effort 1");
+  assert.ok(Math.abs(g2.effort - 0.25) < 1e-9, "energy 50 * (1 - fatigue 50/100) = 0.5 * 0.5 = 0.25");
+});
+
+test("harvestForSettlements: real Team 06 laborer effort raises a settlement's harvest above the population-only baseline, and an empty laborers list leaves the pre-labor formula exactly unchanged", () => {
+  const settlements: SettlementSnapshot[] = [{ settlementId: "s1", locationId: "loc-a", population: 20 }];
+  const harvestable: HarvestableResourceSnapshot[] = [
+    { resourceId: "res-grain-a", locationId: "loc-a", resourceType: "grain", availableAmount: 100 },
+  ];
+
+  const withoutLabor = harvestForSettlements(
+    createInitialEconomyState(),
+    settlements,
+    harvestable,
+    DeterministicRng.fromSeed("test/harvest/labor", 1),
+    { jitterFraction: 0 }, // isolate the labor effect from jitter for a clean comparison
+  );
+
+  const laborers: LaborerSnapshot[] = [
+    { creatureId: "c1", locationId: "loc-a", effort: 1 },
+    { creatureId: "c2", locationId: "loc-a", effort: 0.5 },
+  ];
+  const withLabor = harvestForSettlements(
+    createInitialEconomyState(),
+    settlements,
+    harvestable,
+    DeterministicRng.fromSeed("test/harvest/labor", 1),
+    { jitterFraction: 0 },
+    laborers,
+  );
+
+  const grainWithout = totalStockOf(withoutLabor, "grain");
+  const grainWith = totalStockOf(withLabor, "grain");
+  assert.ok(
+    grainWith > grainWithout,
+    `expected real laborer effort (summed 1.5) to raise the harvest above the population-only baseline (${grainWithout}), got ${grainWith}`,
+  );
+  // populationCap = 20 * 0.05 = 1; laborBonus = 1 + 0.15*1.5 = 1.225; availabilityCap = 100*0.1 = 10, not binding.
+  assert.ok(Math.abs(grainWith - 1.225) < 1e-9, `expected exactly 1.225 with default laborBonusPerEffort, got ${grainWith}`);
+
+  // Backward compatibility: omitting `laborers` entirely must match passing an explicit empty array, and must match the pre-labor-feature formula.
+  const withEmptyLaborers = harvestForSettlements(
+    createInitialEconomyState(),
+    settlements,
+    harvestable,
+    DeterministicRng.fromSeed("test/harvest/labor", 1),
+    { jitterFraction: 0 },
+    [],
+  );
+  assert.ok(
+    Math.abs(totalStockOf(withEmptyLaborers, "grain") - grainWithout) < 1e-9,
+    "an explicit empty laborers array must produce identical output to omitting the parameter entirely",
+  );
+});
+
+test("pipeline integration: a real Team 06 creature performing \"gather\" at a settlement's location measurably raises that settlement's Team 09 stock relative to an identical run with no laborers", () => {
+  const locationId = "loc-labor-x";
+  const resource = createResource({
+    resourceId: "res-grain-labor-x",
+    resourceType: "grain",
+    location: locationId,
+    availableAmount: 100000,
+    capacity: 100000,
+    regenerationRate: 0,
+  });
+
+  function buildBaseState(): WorldState {
+    let state = createInitialWorldState(createWorldSeed({ seed: "labor-pipeline-integration" }));
+    state = {
+      ...state,
+      modules: { ...state.modules, [ECOLOGY_MODULE_KEY]: createInitialEcologyState({ resources: [resource] }) },
+    };
+    let society = createInitialSocietyState();
+    const created = createGroup(society, ["founder"], 0);
+    society = created.society;
+    society = {
+      ...society,
+      settlements: {
+        "settlement-labor-x": {
+          settlementId: "settlement-labor-x",
+          locationId,
+          groupId: created.groupId,
+          foundedTick: 0,
+          presence: 100,
+          population: 20,
+          settlementType: "hamlet",
+          defensibility: 0,
+        },
+      },
+    };
+    return { ...state, modules: { ...state.modules, [SOCIETY_MODULE_KEY]: society } };
+  }
+
+  const pipelineNoLabor = createDefaultSimulationPipeline();
+  const stateNoLabor = tickN(buildBaseState(), 5, pipelineNoLabor);
+  const stocksNoLabor = (stateNoLabor.modules[ECONOMY_MODULE_KEY] as EconomyState).stocks["settlement-labor-x"] ?? {};
+  const totalNoLabor = Object.values(stocksNoLabor).reduce((a, b) => a + b, 0);
+
+  // Explicit fixed-laborer adapter (bypasses Team 06 decision-AI timing/emergent-action uncertainty entirely, for a clean, deterministic assertion — the adapter contract itself, and its wiring into harvestForSettlements, is already covered by the two unit tests above).
+  const fixedLaborAdapter = { listLaborers: () => [{ creatureId: "forced-laborer", locationId, effort: 1 }] };
+  const pipelineWithFixedLabor = createDefaultSimulationPipeline({
+    economyOptions: { adapters: { ...defaultEconomyAdapters, labor: fixedLaborAdapter } },
+  });
+  const stateWithLabor = tickN(buildBaseState(), 5, pipelineWithFixedLabor);
+  const stocksWithLabor = (stateWithLabor.modules[ECONOMY_MODULE_KEY] as EconomyState).stocks["settlement-labor-x"] ?? {};
+  const totalWithLabor = Object.values(stocksWithLabor).reduce((a, b) => a + b, 0);
+
+  assert.ok(
+    totalWithLabor > totalNoLabor,
+    `expected a real laborer at the settlement's location to raise its Team 09 stock (no-labor: ${totalNoLabor}, with-labor: ${totalWithLabor})`,
+  );
+});
+
