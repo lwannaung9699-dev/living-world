@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Explicit find+xargs instead of a shell glob (`src/sim/test/**/*.test.ts`)
+      # on purpose — Session 2 (2026-08-20, see Notion "Session Relay Log")
+      # discovered that a non-interactive shell without globstar silently
+      # collapses that glob to a much smaller matched set with a zero exit
+      # code, producing a false "all green" result (290/476 tests actually
+      # ran, no error surfaced). Enumerating files explicitly removes that
+      # failure mode regardless of the shell's glob configuration.
+      - name: Discover sim test files
+        id: discover
+        run: |
+          find src/sim/test -name '*.test.ts' | sort > /tmp/sim-test-files.txt
+          COUNT=$(wc -l < /tmp/sim-test-files.txt)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Discovered $COUNT sim test files"
+
+      - name: Run sim test suite
+        run: |
+          xargs -a /tmp/sim-test-files.txt tsx --test > /tmp/sim-test-output.txt 2>&1
+          tail -n 40 /tmp/sim-test-output.txt
+
+      # Sanity check (PM audit recommendation #3, 2026-08-21): cross-check the
+      # test runner's own reported count against how many files we discovered,
+      # so a silent partial-run regresses CI instead of passing quietly.
+      - name: Verify reported test count is non-trivial
+        run: |
+          REPORTED=$(grep -E '^# tests [0-9]+' /tmp/sim-test-output.txt | grep -oE '[0-9]+')
+          DISCOVERED_FILES=${{ steps.discover.outputs.count }}
+          echo "Test runner reported: ${REPORTED:-<none found>} tests, across $DISCOVERED_FILES files"
+          if [ -z "$REPORTED" ]; then
+            echo "::error::Could not find a '# tests N' summary line in test output — treat as a failure, not a silent pass."
+            exit 1
+          fi
+          if [ "$REPORTED" -lt "$DISCOVERED_FILES" ]; then
+            echo "::error::Reported test count ($REPORTED) is lower than the number of test files ($DISCOVERED_FILES) — at least one file likely contributed zero tests or failed to load."
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: npm run typecheck
