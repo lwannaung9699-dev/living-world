@@ -13,7 +13,7 @@ import type { EcologyModuleState } from "../ecology/state";
 import type { EcologicalResource } from "../ecology/resources";
 import { createCreatureSubsystemTick, getCreatureModuleState, StaticEnvironmentQuery } from "../creature/tick/creatureTick";
 import type { EnvironmentQuery } from "../creature/tick/creatureTick";
-import { StaticBiologyProvider } from "../creature/integration/biologyAdapter";
+import { StateBackedBiologyProvider } from "../creature/integration/biologyAdapter";
 import type { BiologyProvider } from "../creature/integration/biologyAdapter";
 import type { EcologyProvider } from "../creature/integration/ecologyAdapter";
 import { createSocietyTick } from "../society/tick";
@@ -93,19 +93,24 @@ export interface FullSimulationPipeline {
 export function createDefaultSimulationPipeline(
   options: DefaultSimulationPipelineOptions = {},
 ): SimulationContext {
-  const creatureBiology = options.creatureBiology ?? new StaticBiologyProvider();
+  const stateBackedBiology = options.creatureBiology
+    ? undefined
+    : new StateBackedBiologyProvider(options.speciesRegistry ?? {});
+  const creatureBiology = options.creatureBiology ?? stateBackedBiology!;
   const environment = options.creatureEnvironment ?? new StaticEnvironmentQuery();
   const stateBackedEcology = options.creatureEcology ? undefined : new StateBackedEcologyProvider();
   const creatureEcology = options.creatureEcology ?? stateBackedEcology!;
   const societyAdapters = options.societyAdapters ?? createStateBackedSocietyAdapters(environment);
 
   const creatureSubsystem = createCreatureSubsystemTick(creatureBiology, creatureEcology, environment);
-  const stateAwareCreatureSubsystem: SubsystemTickFn = stateBackedEcology
-    ? (state: WorldState, rng) => {
-        stateBackedEcology.setState(state);
-        return creatureSubsystem(state, rng);
-      }
-    : creatureSubsystem;
+  const stateAwareCreatureSubsystem: SubsystemTickFn =
+    stateBackedEcology || stateBackedBiology
+      ? (state: WorldState, rng) => {
+          stateBackedEcology?.setState(state);
+          stateBackedBiology?.setState(state);
+          return creatureSubsystem(state, rng);
+        }
+      : creatureSubsystem;
 
   const ecologyContext: EcologyTickContext = {
     ...options.ecologyContext,
