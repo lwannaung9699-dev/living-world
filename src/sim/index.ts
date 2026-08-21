@@ -75,6 +75,12 @@ export * from "./politics";
 // First slice only — production/storage/conservation. See
 // src/sim/economy/README.md for exactly what is and isn't built yet.
 export * from "./economy";
+// Explicit disambiguation: politics and economy both independently
+// define a `SettlementSnapshot` type for different purposes (population
+// vs. resource/production data). Re-export economy's under a distinct
+// name to resolve the TS2308 ambiguous-export error, without touching
+// either subsystem's own source.
+export type { SettlementSnapshot as EconomySettlementSnapshot } from "./economy/contracts";
 
 // --- Canonical Team 01–08 pipeline ------------------------------------------
 // Worldgen remains a one-time bootstrap; this helper composes all tickable
