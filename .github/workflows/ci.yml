@@ -39,7 +39,7 @@ jobs:
 
       - name: Run sim test suite
         run: |
-          xargs -a /tmp/sim-test-files.txt tsx --test > /tmp/sim-test-output.txt 2>&1
+          xargs -a /tmp/sim-test-files.txt npx tsx --test > /tmp/sim-test-output.txt 2>&1
           tail -n 40 /tmp/sim-test-output.txt
 
       # Sanity check (PM audit recommendation #3, 2026-08-21): cross-check the
